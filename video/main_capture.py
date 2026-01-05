@@ -1,37 +1,29 @@
-import cv2
-
-from capture.camera import capture_image
-from canonicalization.pipeline import canonicalize
+from capture.camera import capture_video
+from canonicalization.process_video import process_video_file
 from hashing.crypto_hash import sha256_hash
 from hashing.combine import create_message
 from signing.sign import sign_message
 from metadata.collect import collect_metadata
-from storage.image_store import save_image
 from storage.signature_store import save_signature
+from utils.constants import VIDEO_DURATION_SECONDS
 
-# 1️⃣ Capture image
-img = capture_image()
+# 1️⃣ Capture video (5 seconds) and save as video file
+video_path = capture_video(duration_seconds=VIDEO_DURATION_SECONDS, output_path="storage/video.mp4")
 
-# 2️⃣ Canonicalize
-canon = canonicalize(img)
+# 2️⃣ Process video: extract frames per second, canonicalize, combine
+combined_matrix = process_video_file(video_path)
 
-# 3️⃣ Save canonical image (THIS is what you verify later)
-save_image(canon, "storage/canonical.png")
+# 3️⃣ Hash combined matrix
+hash_val = sha256_hash(combined_matrix.tobytes())
 
-# (Optional) Save raw image for viewing
-save_image(img, "storage/raw.jpg")
-
-# 4️⃣ Hash canonical image
-hash_val = sha256_hash(canon.tobytes())
-
-# 5️⃣ Collect metadata
+# 4️⃣ Collect metadata
 metadata = collect_metadata()
 
-# 6️⃣ Create signed message
+# 5️⃣ Create signed message
 message = create_message(hash_val, metadata)
 signature = sign_message(message)
 
-# 7️⃣ Save signature bundle
-save_signature("storage/signature.json", message, signature)
+# 6️⃣ Save signature bundle
+save_signature("storage/video_signature.json", message, signature)
 
-print("✅ Image captured, canonicalized, and signed")
+print("✅ Video captured, processed, and signed")
