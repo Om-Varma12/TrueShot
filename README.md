@@ -22,6 +22,16 @@ Prerequisites
 - ffmpeg/ffprobe on your PATH (required for video metadata embedding).
 - A webcam if you want to run live capture scripts.
 
+First-Time Crypto Setup (Required)
+- Before running either the backend scripts or the React app, you **must generate your own Ed25519 keypair**.
+- Keys are per-pipeline, stored in the filesystem (never checked into git):
+  - Image pipeline keys: `back/image/private_key.pem` and `back/image/public_key.pem`
+  - Video pipeline keys: `back/video/private_key.pem` and `back/video/public_key.pem`
+- To generate them, run once per pipeline:
+  - `cd back/image && python signing/keygen.py`
+  - `cd back/video && python signing/keygen.py`
+
+
 Quick Start (Front End)
 1) `cd front`
 2) `npm install` (or `bun install`)
@@ -32,13 +42,13 @@ Quick Start (Backend)
   1) `cd back/image`
   2) `python -m venv .venv && .venv\Scripts\activate` (PowerShell)  
      `pip install opencv-python pillow piexif numpy cryptography`
-  3) `python signing/keygen.py` to create `private_key.pem` / `public_key.pem`.
+  3) `python signing/keygen.py` to create **your own** `private_key.pem` / `public_key.pem` (required once before using this pipeline).
   4) `python main_capture.py` to capture, canonicalize, hash, sign, and embed.
   5) `python main_verify.py` to re-canonicalize and verify authenticity.
 - Video pipeline (requires ffmpeg):
   1) `cd back/video`
   2) Create/activate the venv as above and `pip install opencv-python pillow numpy cryptography`
-  3) `python signing/keygen.py`
+  3) `python signing/keygen.py` to create **your own** `private_key.pem` / `public_key.pem` for videos.
   4) `python main_capture.py` to record ~5s, process frames, sign, and embed.
   5) `python main_verify.py` to reprocess and verify the video.
 

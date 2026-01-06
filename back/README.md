@@ -22,13 +22,20 @@ Prerequisites
 - ffmpeg/ffprobe in PATH (video metadata embedding/extraction).
 - A webcam for live capture.
 
+First-Time Key Generation (Required)
+- Before you can capture or verify anything, generate your own Ed25519 keypair.
+- Keys are created locally per pipeline and are required by **all** capture/verify scripts and by any client that talks to them.
+- Run once per pipeline:
+  - Image: `cd back/image && python signing/keygen.py` → creates `private_key.pem` / `public_key.pem` in `back/image`.
+  - Video: `cd back/video && python signing/keygen.py` → creates `private_key.pem` / `public_key.pem` in `back/video`.
+
 Setup
 1) Choose a pipeline and enter its folder, e.g. `cd back/image` or `cd back/video`.
 2) Create/activate a virtual environment:
    - Windows PowerShell: `python -m venv .venv; .\.venv\Scripts\activate`
 3) Install dependencies: `pip install -r requirements.txt`
 4) Generate signing keys (writes `private_key.pem` and `public_key.pem` into the pipeline root):
-   - `python signing/keygen.py`
+   - `python signing/keygen.py` (run this **before** `main_capture.py` / `main_verify.py` or any client that uses the backend).
 
 Image Workflow
 1) Capture + sign: `python main_capture.py`

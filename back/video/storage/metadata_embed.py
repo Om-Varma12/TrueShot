@@ -32,23 +32,30 @@ def embed_metadata(video_path, hash_value, signature, message_bytes):
     metadata_json = json.dumps(metadata_dict, sort_keys=True)
     
     # Create temporary output file
-    temp_output = video_path + ".tmp"
+    # Ensure temp file keeps an mp4 extension so ffmpeg picks correct muxer
+    temp_output = video_path + ".tmp.mp4"
     
     # Use ffmpeg to embed metadata
-    # MP4 metadata is stored in the 'comment' field or custom metadata fields
+    # MP4 metadata is stored in format tags; we write both a JSON comment and individual fields
     try:
-        # Method 1: Use comment field (most compatible)
         cmd = [
             'ffmpeg',
             '-i', video_path,
+            # Primary JSON blob (most robust)
             '-metadata', f'comment={metadata_json}',
-            '-metadata', f'description=TrueShot verification data',
-            '-codec', 'copy',  # Copy codec to avoid re-encoding
-            '-y',  # Overwrite output file
+            '-metadata', f'TrueShot={metadata_json}',
+            # Redundant individual fields (for readers that drop comment)
+            '-metadata', 'TrueShotHash=' + hash_value,
+            '-metadata', 'TrueShotSignature=' + signature_b64,
+            '-metadata', 'TrueShotMessage=' + message_b64,
+            '-metadata', 'description=TrueShot verification data',
+            '-codec', 'copy',          # Avoid re-encoding
+            '-movflags', 'use_metadata_tags',  # Persist tags in MP4 udta
+            '-y',
             temp_output
         ]
         
-        result = subprocess.run(
+        subprocess.run(
             cmd,
             capture_output=True,
             text=True,
@@ -61,36 +68,10 @@ def embed_metadata(video_path, hash_value, signature, message_bytes):
         return video_path
         
     except subprocess.CalledProcessError as e:
-        # If ffmpeg fails, try alternative method using custom metadata
-        try:
-            # Alternative: Use custom metadata fields
-            cmd = [
-                'ffmpeg',
-                '-i', video_path,
-                '-metadata', 'TrueShotHash=' + hash_value,
-                '-metadata', 'TrueShotSignature=' + signature_b64,
-                '-metadata', 'TrueShotMessage=' + message_b64,
-                '-codec', 'copy',
-                '-y',
-                temp_output
-            ]
-            
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            
-            os.replace(temp_output, video_path)
-            return video_path
-            
-        except Exception as e2:
-            # Clean up temp file if it exists
-            if os.path.exists(temp_output):
-                os.remove(temp_output)
-            raise RuntimeError(f"Failed to embed metadata: {e2}")
-    
+        # Clean up temp file if it exists
+        if os.path.exists(temp_output):
+            os.remove(temp_output)
+        raise RuntimeError(f"Failed to embed metadata: {e.stderr or e}")
     except FileNotFoundError:
         raise RuntimeError("ffmpeg not found. Please install ffmpeg to embed video metadata.")
 
@@ -125,42 +106,60 @@ def extract_metadata(video_path):
         # Parse JSON output
         probe_data = json.loads(result.stdout)
         format_info = probe_data.get('format', {})
-        tags = format_info.get('tags', {})
+        tags = format_info.get('tags', {}) or {}
+
+        # Helper to read both lowercase/uppercase keys
+        def _get_tag(tag_dict, key):
+            return tag_dict.get(key) or tag_dict.get(key.upper())
         
-        # Try to get metadata from comment field first
-        comment = tags.get('comment') or tags.get('COMMENT')
+        metadata_dict = None
         
+        # Try format-level JSON comment first
+        comment = _get_tag(tags, 'comment') or _get_tag(tags, 'TrueShot')
         if comment:
             try:
                 metadata_dict = json.loads(comment)
             except json.JSONDecodeError:
-                # If comment is not JSON, try individual fields
-                hash_value = tags.get('TrueShotHash') or tags.get('TRUESHOTHASH')
-                signature_b64 = tags.get('TrueShotSignature') or tags.get('TRUESHOTSIGNATURE')
-                message_b64 = tags.get('TrueShotMessage') or tags.get('TRUESHOTMESSAGE')
-                
-                if hash_value and signature_b64 and message_b64:
-                    metadata_dict = {
-                        "hash": hash_value,
-                        "signature": signature_b64,
-                        "message": message_b64
-                    }
-                else:
-                    return None
-        else:
-            # Try individual metadata fields
-            hash_value = tags.get('TrueShotHash') or tags.get('TRUESHOTHASH')
-            signature_b64 = tags.get('TrueShotSignature') or tags.get('TRUESHOTSIGNATURE')
-            message_b64 = tags.get('TrueShotMessage') or tags.get('TRUESHOTMESSAGE')
-            
+                metadata_dict = None
+        
+        # If not found, try individual fields at format level
+        if metadata_dict is None:
+            hash_value = _get_tag(tags, 'TrueShotHash')
+            signature_b64 = _get_tag(tags, 'TrueShotSignature')
+            message_b64 = _get_tag(tags, 'TrueShotMessage')
             if hash_value and signature_b64 and message_b64:
                 metadata_dict = {
                     "hash": hash_value,
                     "signature": signature_b64,
                     "message": message_b64
                 }
-            else:
-                return None
+        
+        # If still not found, inspect stream tags (some muxers store tags per stream)
+        if metadata_dict is None:
+            streams = probe_data.get('streams', []) or []
+            for stream in streams:
+                stream_tags = stream.get('tags', {}) or {}
+                comment = _get_tag(stream_tags, 'comment') or _get_tag(stream_tags, 'TrueShot')
+                if comment:
+                    try:
+                        metadata_dict = json.loads(comment)
+                        break
+                    except json.JSONDecodeError:
+                        metadata_dict = None
+                if metadata_dict is None:
+                    hash_value = _get_tag(stream_tags, 'TrueShotHash')
+                    signature_b64 = _get_tag(stream_tags, 'TrueShotSignature')
+                    message_b64 = _get_tag(stream_tags, 'TrueShotMessage')
+                    if hash_value and signature_b64 and message_b64:
+                        metadata_dict = {
+                            "hash": hash_value,
+                            "signature": signature_b64,
+                            "message": message_b64
+                        }
+                        break
+        
+        if metadata_dict is None:
+            return None
         
         # Extract values
         hash_value = metadata_dict.get("hash")

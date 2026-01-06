@@ -2,6 +2,7 @@ import base64
 import json
 from PIL import Image
 from PIL.ExifTags import TAGS
+from PIL.PngImagePlugin import PngInfo
 import io
 
 try:
@@ -45,25 +46,24 @@ def embed_metadata(image_path, hash_value, signature, message_bytes):
     file_format = img.format.lower() if img.format else image_path.split('.')[-1].lower()
     
     if file_format == 'png':
-        # PNG: Use text chunks (tEXt chunks)
-        # PIL automatically saves items in img.info as PNG text chunks when saving PNG format
-        # We'll use a custom key "TrueShot" to store JSON data
-        # Update the info dict
-        if img.info:
-            img.info['TrueShot'] = metadata_json
-            img.info['TrueShotHash'] = hash_value
-            img.info['TrueShotSignature'] = signature_b64
-            img.info['TrueShotMessage'] = message_b64
-        else:
-            img.info = {
-                'TrueShot': metadata_json,
-                'TrueShotHash': hash_value,
-                'TrueShotSignature': signature_b64,
-                'TrueShotMessage': message_b64
-            }
+        # PNG: Use explicit tEXt chunks to ensure persistence on save
+        png_info = PngInfo()
+
+        # Preserve any existing text chunks
+        for k, v in img.info.items():
+            if isinstance(v, bytes):
+                # Avoid bytes; convert to str to satisfy add_text
+                v = v.decode("utf-8", errors="ignore")
+            png_info.add_text(k, str(v))
+
+        # Add our fields
+        png_info.add_text("TrueShot", metadata_json)
+        png_info.add_text("TrueShotHash", hash_value)
+        png_info.add_text("TrueShotSignature", signature_b64)
+        png_info.add_text("TrueShotMessage", message_b64)
         
-        # Save PNG with text chunks (PIL automatically saves img.info as PNG text chunks)
-        img.save(image_path, format='PNG')
+        # Save PNG with explicit metadata
+        img.save(image_path, format='PNG', pnginfo=png_info)
         return image_path
         
     elif file_format in ['jpeg', 'jpg']:
