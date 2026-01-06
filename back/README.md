@@ -18,8 +18,7 @@ Directory Map (per pipeline)
 Prerequisites
 - Python 3.10+
 - Dependencies (install inside a venv):
-  - Images: `pip install opencv-python pillow piexif numpy cryptography`
-  - Video:  `pip install opencv-python pillow numpy cryptography`
+  - `pip install -r requirements.txt`
 - ffmpeg/ffprobe in PATH (video metadata embedding/extraction).
 - A webcam for live capture.
 
@@ -27,7 +26,7 @@ Setup
 1) Choose a pipeline and enter its folder, e.g. `cd back/image` or `cd back/video`.
 2) Create/activate a virtual environment:
    - Windows PowerShell: `python -m venv .venv; .\.venv\Scripts\activate`
-3) Install the dependencies listed above.
+3) Install dependencies: `pip install -r requirements.txt`
 4) Generate signing keys (writes `private_key.pem` and `public_key.pem` into the pipeline root):
    - `python signing/keygen.py`
 
