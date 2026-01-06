@@ -7,7 +7,7 @@ from hashing.combine import create_message
 from signing.sign import sign_message
 from metadata.collect import collect_metadata
 from storage.image_store import save_image
-from storage.signature_store import save_signature
+from storage.metadata_embed import embed_metadata
 
 # 1️⃣ Capture image
 img = capture_image()
@@ -16,7 +16,7 @@ img = capture_image()
 canon = canonicalize(img)
 
 # 3️⃣ Save canonical image (THIS is what you verify later)
-save_image(canon, "storage/canonical.png")
+canonical_path = save_image(canon, "storage/canonical.png")
 
 # (Optional) Save raw image for viewing
 save_image(img, "storage/raw.jpg")
@@ -31,7 +31,7 @@ metadata = collect_metadata()
 message = create_message(hash_val, metadata)
 signature = sign_message(message)
 
-# 7️⃣ Save signature bundle
-save_signature("storage/signature.json", message, signature)
+# 7️⃣ Embed metadata (hash and signature) into image
+embed_metadata(canonical_path, hash_val, signature, message)
 
-print("✅ Image captured, canonicalized, and signed")
+print("✅ Image captured, canonicalized, and signed (metadata embedded)")

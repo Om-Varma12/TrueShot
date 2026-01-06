@@ -4,7 +4,7 @@ from hashing.crypto_hash import sha256_hash
 from hashing.combine import create_message
 from signing.sign import sign_message
 from metadata.collect import collect_metadata
-from storage.signature_store import save_signature
+from storage.metadata_embed import embed_metadata
 from utils.constants import VIDEO_DURATION_SECONDS
 
 # 1️⃣ Capture video (5 seconds) and save as video file
@@ -23,7 +23,7 @@ metadata = collect_metadata()
 message = create_message(hash_val, metadata)
 signature = sign_message(message)
 
-# 6️⃣ Save signature bundle
-save_signature("storage/video_signature.json", message, signature)
+# 6️⃣ Embed metadata (hash and signature) into video
+embed_metadata(video_path, hash_val, signature, message)
 
-print("✅ Video captured, processed, and signed")
+print("✅ Video captured, processed, and signed (metadata embedded)")
